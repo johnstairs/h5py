@@ -15,11 +15,17 @@
 
 include "config.pxi"
 
+cdef struct vlen_t:
+    size_t len
+    void* ptr
+
 cdef enum copy_dir:
     H5PY_SCATTER = 0,
     H5PY_GATHER
 
 cdef herr_t attr_rw(hid_t attr, hid_t mtype, void *progbuf, int read) except -1:
+
+    print("in attr_rw")
 
     cdef htri_t need_bkg
     cdef hid_t atype = -1
@@ -46,15 +52,22 @@ cdef herr_t attr_rw(hid_t attr, hid_t mtype, void *progbuf, int read) except -1:
             aspace = H5Aget_space(attr)
             npoints = H5Sget_select_npoints(aspace)
 
+            print(f"create_buffer. asize={asize} msize={msize} npoints={npoints} ")
+
             conv_buf = create_buffer(asize, msize, npoints)
 
             if read:
                 need_bkg = needs_bkg_buffer(atype, mtype)
             else:
                 need_bkg = needs_bkg_buffer(mtype, atype)
+
+            print(f"need_bkg={need_bkg}")
             if need_bkg:
                 back_buf = malloc(msize*npoints)
                 memcpy(back_buf, progbuf, msize*npoints)
+
+            print(f"attr_rw conv_buf: {<unsigned long>conv_buf:x}")
+            print(f"attr_rw back_buf: {<unsigned long>back_buf:x}")
 
             if read:
                 H5Aread(attr, atype, conv_buf)
@@ -234,6 +247,7 @@ cdef void* create_buffer(size_t ipt_size, size_t opt_size, size_t nl) except NUL
         final_size = opt_size*nl
 
     buf = malloc(final_size)
+    print(f"malloc {final_size}")
     if buf == NULL:
         raise MemoryError("Failed to allocate conversion buffer")
 

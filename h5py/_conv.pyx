@@ -22,6 +22,7 @@ from .h5t cimport H5PY_OBJ, typewrap, py_create, TypeID, H5PY_PYTHON_OPAQUE_TAG
 from libc.stdlib cimport realloc
 from libc.string cimport strcmp
 from .utils cimport emalloc, efree
+from ._proxy cimport needs_bkg_buffer
 cfg = get_config()
 
 # Initialization of numpy
@@ -756,6 +757,8 @@ cdef herr_t ndarray2vlen(hid_t src_id,
         PyObject *pdata_elem
         char* buf = <char*>buf_i
 
+    print(f"Entered ndarray2vlen. Command = {command}. nl = {nl}. buf_stride = {buf_stride}")
+
     if command == H5T_CONV_INIT:
         cdata[0].need_bkg = H5T_BKG_NO
         if not H5Tequal(src_id, H5PY_OBJ) or H5Tget_class(dst_id) != H5T_VLEN:
@@ -781,6 +784,7 @@ cdef herr_t ndarray2vlen(hid_t src_id,
 
         # need to pass element dtype to converter
         pdata_elem = pdata[0]
+        # supertype = typewrap(H5Tget_super(py_create((<cnp.ndarray> pdata_elem).dtype, logical=True).id))
         supertype = py_create((<cnp.ndarray> pdata_elem).dtype)
         outtype = typewrap(H5Tget_super(dst_id))
 
@@ -792,6 +796,8 @@ cdef herr_t ndarray2vlen(hid_t src_id,
 
             src_size = H5Tget_size(src_id)
             dst_size = H5Tget_size(dst_id)
+
+            print(f"src_size={src_size} dst_size={dst_size}")
 
             if src_size >= dst_size:
                 for i in range(nl):
@@ -827,7 +833,9 @@ cdef int conv_ndarray2vlen(void* ipt,
         size_t len, nbytes
         PyObject* buf_obj0
         Py_buffer view
-
+        htri_t need_bkg
+        void* back_buf = NULL
+        
     buf_obj0 = buf_obj[0]
     ndarray = <cnp.ndarray> buf_obj0
     len = ndarray.shape[0]
@@ -839,7 +847,18 @@ cdef int conv_ndarray2vlen(void* ipt,
     PyBuffer_ToContiguous(data, &view, view.len, b'C')
     PyBuffer_Release(&view)
 
-    H5Tconvert(intype.id, outtype.id, len, data, NULL, H5P_DEFAULT)
+    need_bkg = needs_bkg_buffer(intype.id, outtype.id)
+    if need_bkg:
+        back_buf = malloc(H5Tget_size(outtype.id)*len)
+
+    print("")
+    print(f"calling H5Tconvert. len={len}, nbytes={nbytes}, intype.id={H5Tget_size(intype.id)}, outtype.id={H5Tget_size(outtype.id)}")
+    print(f"buf_obj: {<unsigned long>buf_obj:x}")
+    print(f"in_vlen: {<unsigned long>in_vlen:x}")
+
+    H5Tconvert(intype.id, outtype.id, len, data, back_buf, H5P_DEFAULT)
+    print(f"DONE calling H5Tconvert. len={len}, nbytes={nbytes}, intype.id={H5Tget_size(intype.id)}, outtype.id={H5Tget_size(outtype.id)}")
+    print("")
 
     in_vlen[0].len = len
     in_vlen[0].ptr = data

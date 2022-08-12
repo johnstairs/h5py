@@ -172,8 +172,8 @@ class AttributeManager(base.MutableMappingHDF5, base.CommonStateObject):
                     data = data.reshape(shape)
 
             # We need this to handle special string types.
-            if not isinstance(data, Empty):
-                data = numpy.asarray(data, dtype=dtype)
+            # if not isinstance(data, Empty):
+            #     data = numpy.asarray(data, dtype=dtype)
 
             # Make HDF5 datatype and dataspace for the H5A calls
             if use_htype is None:
@@ -181,7 +181,10 @@ class AttributeManager(base.MutableMappingHDF5, base.CommonStateObject):
                 htype2 = h5t.py_create(original_dtype)  # Must be bit-for-bit representation rather than logical
             else:
                 htype = use_htype
-                htype2 = None
+                htype2 = h5t.py_create(original_dtype)
+
+            if h5t.check_vlen_dtype(original_dtype):
+                shape = ()
 
             if isinstance(data, Empty):
                 space = h5s.create(h5s.NULL)

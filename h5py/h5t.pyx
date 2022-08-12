@@ -1186,6 +1186,7 @@ cdef class TypeCompoundID(TypeCompositeID):
         offset indicates the offset from the start of the compound datatype,
         in bytes.
         """
+        print("in insert!")
         H5Tinsert(self.id, name, offset, field.id)
 
 
@@ -1630,10 +1631,13 @@ cdef TypeCompoundID _c_compound(cnp.dtype dt, int logical, int aligned):
     if aligned and member_offset > dt.itemsize:
         raise TypeError("Enforced alignment not compatible with HDF5 type")
 
+    print(f"creating compound type {tid} size = {member_offset} logical = {logical}")
+    
     # Create compound with the necessary size, and insert its members
     tid = H5Tcreate(H5T_COMPOUND, member_offset)
     for name in dt.names:
         h5_name, member_offset, member_type = fields[name]
+        print(f"\t{name} offset={member_offset}")
         H5Tinsert(tid, h5_name, member_offset, member_type.id)
 
     return TypeCompoundID(tid)
