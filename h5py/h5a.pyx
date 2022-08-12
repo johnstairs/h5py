@@ -389,7 +389,7 @@ cdef class AttrID(ObjectID):
             if mtype is None:
                 mtype = py_create(arr.dtype)
 
-            if H5Tget_class(mtype.id) == H5T_VLEN:
+            if H5Tget_class(H5Aget_type(self.id)) == H5T_VLEN:
                 data = &arr_ptr
             else:
                 data = PyArray_DATA(arr)

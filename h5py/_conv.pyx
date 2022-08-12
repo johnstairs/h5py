@@ -701,6 +701,7 @@ cdef int conv_vlen2ndarray(void* ipt,
         int flags = NPY_WRITEABLE | NPY_C_CONTIGUOUS | NPY_OWNDATA
         npy_intp dims[1]
         void* data
+        void* back_buf = NULL
         cdef char[:] buf
         cnp.ndarray ndarray
         PyObject* ndarray_obj
@@ -715,7 +716,11 @@ cdef int conv_vlen2ndarray(void* ipt,
     itemsize = H5Tget_size(outtype.id)
     if itemsize > H5Tget_size(intype.id):
         data = realloc(data, itemsize * size)
-    H5Tconvert(intype.id, outtype.id, size, data, NULL, H5P_DEFAULT)
+
+    if needs_bkg_buffer(intype.id, outtype.id):
+        back_buf = malloc(H5Tget_size(outtype.id)*size)
+
+    H5Tconvert(intype.id, outtype.id, size, data, back_buf, H5P_DEFAULT)
 
     if elem_dtype.kind in b"biufcmMO":
         # type_num is enough to create an array for these dtypes
@@ -833,35 +838,36 @@ cdef int conv_ndarray2vlen(void* ipt,
         size_t len, nbytes
         PyObject* buf_obj0
         Py_buffer view
-        htri_t need_bkg
         void* back_buf = NULL
+    try:    
+        buf_obj0 = buf_obj[0]
+        ndarray = <cnp.ndarray> buf_obj0
+        len = ndarray.shape[0]
+        nbytes = len * max(H5Tget_size(outtype.id), H5Tget_size(intype.id))
+
+        data = emalloc(nbytes)
+
+        PyObject_GetBuffer(ndarray, &view, PyBUF_INDIRECT)
+        PyBuffer_ToContiguous(data, &view, view.len, b'C')
+        PyBuffer_Release(&view)
+
+        if needs_bkg_buffer(intype.id, outtype.id):
+            back_buf = malloc(H5Tget_size(outtype.id)*len)
+
+        print("")
+        print(f"calling H5Tconvert. len={len}, nbytes={nbytes}, intype.id={H5Tget_size(intype.id)}, outtype.id={H5Tget_size(outtype.id)}")
+        print(f"buf_obj: {<unsigned long>buf_obj:x}")
+        print(f"in_vlen: {<unsigned long>in_vlen:x}")
+
+        H5Tconvert(intype.id, outtype.id, len, data, back_buf, H5P_DEFAULT)
+        print(f"DONE calling H5Tconvert. len={len}, nbytes={nbytes}, intype.id={H5Tget_size(intype.id)}, outtype.id={H5Tget_size(outtype.id)}")
+        print("")
+
+        in_vlen[0].len = len
+        in_vlen[0].ptr = data
         
-    buf_obj0 = buf_obj[0]
-    ndarray = <cnp.ndarray> buf_obj0
-    len = ndarray.shape[0]
-    nbytes = len * max(H5Tget_size(outtype.id), H5Tget_size(intype.id))
-
-    data = emalloc(nbytes)
-
-    PyObject_GetBuffer(ndarray, &view, PyBUF_INDIRECT)
-    PyBuffer_ToContiguous(data, &view, view.len, b'C')
-    PyBuffer_Release(&view)
-
-    need_bkg = needs_bkg_buffer(intype.id, outtype.id)
-    if need_bkg:
-        back_buf = malloc(H5Tget_size(outtype.id)*len)
-
-    print("")
-    print(f"calling H5Tconvert. len={len}, nbytes={nbytes}, intype.id={H5Tget_size(intype.id)}, outtype.id={H5Tget_size(outtype.id)}")
-    print(f"buf_obj: {<unsigned long>buf_obj:x}")
-    print(f"in_vlen: {<unsigned long>in_vlen:x}")
-
-    H5Tconvert(intype.id, outtype.id, len, data, back_buf, H5P_DEFAULT)
-    print(f"DONE calling H5Tconvert. len={len}, nbytes={nbytes}, intype.id={H5Tget_size(intype.id)}, outtype.id={H5Tget_size(outtype.id)}")
-    print("")
-
-    in_vlen[0].len = len
-    in_vlen[0].ptr = data
+    finally:
+        free(back_buf)
 
     return 0
 
