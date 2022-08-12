@@ -163,9 +163,13 @@ DEF CYTHON_BUILD_VERSION = '{cython_version}'
 
         # Run Cython
         print("Executing cythonize()")
-        self.extensions = cythonize(self._make_extensions(config),
+        extensions = self._make_extensions(config)
+        for ext in extensions:
+            ext.extra_compile_args=["-O0"]
+        self.extensions = cythonize(extensions,
                                     force=config.changed() or self.force,
-                                    language_level=3)
+                                    language_level=3,
+                                    gdb_debug=True)
 
         # Perform the build
         build_ext.run(self)
