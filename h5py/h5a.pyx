@@ -378,8 +378,6 @@ cdef class AttrID(ObjectID):
         the write will fail with an exception.
         """
         cdef hid_t space_id
-        cdef void* arr_ptr = <void*> arr
-        cdef void* data
         space_id = 0
 
         try:
@@ -389,12 +387,7 @@ cdef class AttrID(ObjectID):
             if mtype is None:
                 mtype = py_create(arr.dtype)
 
-            if H5Tget_class(H5Aget_type(self.id)) == H5T_VLEN:
-                data = &arr_ptr
-            else:
-                data = PyArray_DATA(arr)
-
-            attr_rw(self.id, mtype.id, data, 0)
+            attr_rw(self.id, mtype.id, PyArray_DATA(arr), 0)
 
         finally:
             if space_id:
