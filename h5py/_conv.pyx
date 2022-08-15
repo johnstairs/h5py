@@ -27,7 +27,7 @@ cfg = get_config()
 
 # Initialization of numpy
 cimport numpy as cnp
-from numpy cimport npy_intp, NPY_WRITEABLE, NPY_C_CONTIGUOUS, NPY_OWNDATA
+from numpy cimport npy_intp, NPY_WRITEABLE, NPY_C_CONTIGUOUS, NPY_OWNDATA, PyArray_DATA
 cnp._import_array()
 import numpy as np
 
@@ -721,7 +721,7 @@ cdef int conv_vlen2ndarray(void* ipt,
         back_buf = malloc(H5Tget_size(outtype.id)*size)
 
     H5Tconvert(intype.id, outtype.id, size, data, back_buf, H5P_DEFAULT)
-
+    
     if elem_dtype.kind in b"biufcmMO":
         # type_num is enough to create an array for these dtypes
         ndarray = cnp.PyArray_SimpleNewFromData(1, dims, elem_dtype.type_num, data)
@@ -729,8 +729,13 @@ cdef int conv_vlen2ndarray(void* ipt,
         # dtypes like string & void need a size specified, so can't be used with
         # SimpleNewFromData. Cython doesn't expose NumPy C-API functions
         # like NewFromDescr, so we'll construct this with a Python function.
-        buf = <char[:itemsize * size]> data
-        ndarray = np.frombuffer(buf, dtype=elem_dtype)
+        if elem_dtype.kind == b'V':
+            # np.frombuffer (as used below) cannot be used with an object array
+            ndarray = np.empty(size, dtype=elem_dtype)
+            memcpy(PyArray_DATA(ndarray), data, itemsize * size)
+        else:
+            buf = <char[:itemsize * size]> data
+            ndarray = np.frombuffer(buf, dtype=elem_dtype)
 
     PyArray_ENABLEFLAGS(ndarray, flags)
     ndarray_obj = <PyObject*>ndarray
