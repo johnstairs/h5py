@@ -53,8 +53,7 @@ cdef herr_t attr_rw(hid_t attr, hid_t mtype, void *progbuf, int read) except -1:
             else:
                 need_bkg = needs_bkg_buffer(mtype, atype)
             if need_bkg:
-                back_buf = malloc(msize*npoints)
-                memcpy(back_buf, progbuf, msize*npoints)
+                back_buf = malloc((msize if read else asize)*npoints)
 
             if read:
                 H5Aread(attr, atype, conv_buf)
