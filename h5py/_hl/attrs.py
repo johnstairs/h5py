@@ -15,6 +15,7 @@
 """
 
 import numpy
+import numpy.lib.recfunctions
 import uuid
 
 from .. import h5, h5s, h5t, h5a, h5p
@@ -60,6 +61,11 @@ class AttributeManager(base.MutableMappingHDF5, base.CommonStateObject):
 
         dtype = attr.dtype
         shape = attr.shape
+
+        # For the target dtype, correct any unnecessary padding that is a 
+        # result of the attribute's HDF5 layout. For example, a vlen field
+        # in a compound type will have size 8 followed by an unnecessary 8 bytes of padding.
+        dtype = AttributeManager.repack_dtype_fields(dtype)
 
         # Do this first, as we'll be fiddling with the dtype for top-level
         # array types
@@ -285,3 +291,30 @@ class AttributeManager(base.MutableMappingHDF5, base.CommonStateObject):
         if not self._id:
             return "<Attributes of closed HDF5 object>"
         return "<Attributes of HDF5 object at %s>" % id(self._id)
+
+    @staticmethod
+    def repack_dtype_fields(dtype):
+        def check_vlens(dt):
+            dt = numpy.dtype(dt)
+            vlen = h5t.check_vlen_dtype(dt)
+            if vlen not in [None, str, bytes]:
+                repacked_vlen = AttributeManager.repack_dtype_fields(vlen)
+                if repacked_vlen != vlen:
+                    return h5t.vlen_dtype(repacked_vlen)
+            if dt.fields is not None:
+                original_field_types = [dt.fields[f][0] for f in dt.fields]
+                field_types = [AttributeManager.repack_dtype_fields(t) for t in original_field_types]
+                if not all(a is b for a,b in zip(original_field_types, field_types)):
+                    field_names = list(dt.fields)
+                    field_offsets = [dt.fields[f][1] for f in dt.fields]
+                    return numpy.dtype({
+                        'names': field_names,
+                        'formats': field_types,
+                        'offsets': field_offsets,
+                        'itemsize': dt.itemsize,
+                    })
+            return dt
+
+
+        dtype = numpy.lib.recfunctions.repack_fields(dtype, align=True, recurse=True)
+        return check_vlens(dtype)

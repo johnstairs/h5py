@@ -28,6 +28,7 @@ cfg = get_config()
 # Initialization of numpy
 cimport numpy as cnp
 from numpy cimport npy_intp, NPY_WRITEABLE, NPY_C_CONTIGUOUS, NPY_OWNDATA, PyArray_DATA
+from numpy.lib.recfunctions import repack_fields
 cnp._import_array()
 import numpy as np
 
@@ -644,7 +645,7 @@ cdef herr_t vlen2ndarray(hid_t src_id,
     elif command == H5T_CONV_CONV:
         # need to pass element dtype to converter
         supertype = typewrap(H5Tget_super(src_id))
-        dt = supertype.dtype
+        dt = repack_fields(supertype.dtype, align=True, recurse=True)
         outtype = py_create(dt)
 
         if buf_stride == 0:

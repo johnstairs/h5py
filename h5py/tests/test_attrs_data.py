@@ -55,6 +55,71 @@ class TestScalar(BaseAttrs):
         self.assertEqual(out, data)
         self.assertEqual(out['b'], data['b'])
 
+    def test_compound_with_vlen_fields(self):
+        """ Compund scalars with vlen fields can be written and read """
+        dt = np.dtype([('a', h5py.vlen_dtype(np.int32)),
+                       ('b', h5py.vlen_dtype(np.int32))])
+
+        data = np.array((np.array(list(range(1, 5)), dtype=np.int32),
+                        np.array(list(range(8, 10)), dtype=np.int32)), dtype=dt)
+
+        self.f.attrs['x'] = data
+        out = self.f.attrs['x']
+        self.assert_array_equal_flexible(out, data)
+
+    def test_nesting_compound_with_vlen_fields(self):
+        """ Compound scalars with nested compound vlen fields can be written and read """
+        dt = np.dtype([('a', h5py.vlen_dtype(np.int32)),
+                ('b', h5py.vlen_dtype(np.int32))])
+
+        dt2 = np.dtype([('f1', h5py.vlen_dtype(dt)), ('f2', np.int64)])
+
+        inner1 = (
+            np.array(range(1, 3), dtype=np.int32),
+            np.array(range(6, 9), dtype=np.int32))
+
+        inner2 = (
+            np.array(range(10, 14), dtype=np.int32),
+            np.array(range(16, 20), dtype=np.int32))
+
+        data = np.array(
+            (np.array([inner1, inner2], dtype=dt), 
+            2),
+            dtype=dt2)
+
+        self.f.attrs['x'] = data
+        out = self.f.attrs['x']
+        self.assert_array_equal_flexible(out, data)
+
+    def assert_array_equal_flexible(self, arr1, arr2):
+        """ 
+            np.array_equal does not recursively evaluate 
+            structured arrays where a field is an object
+            and its value is an array. 
+            For example:
+
+            dt = np.dtype([('a', h5py.vlen_dtype(np.int32)),
+                           ('b', h5py.vlen_dtype(np.int32))])
+
+            data = np.array((np.array(list(range(1, 5)), dtype=np.int32),
+                             np.array(list(range(8, 10)), dtype=np.int32)), dtype=dt)
+
+            # This returns  false:
+            np.array_equal(data, data.copy())
+        """
+        arr1, arr2 = np.asarray(arr1), np.asarray(arr2)
+        self.assertEqual(arr1.dtype, arr2.dtype)
+        self.assertEqual(arr1.shape, arr2.shape)
+        if arr1.shape == ():
+            if arr1.dtype.fields is not None:
+                for f in arr1.dtype.fields:
+                    self.assert_array_equal_flexible(arr1[()][f], arr2[()][f])
+            else:
+                self.assertTrue(np.array_equal(arr1, arr2))
+        else:
+            for v1, v2 in zip(arr1.flat, arr2.flat):
+                self.assert_array_equal_flexible(v1, v2)
+
 
 class TestArray(BaseAttrs):
 
