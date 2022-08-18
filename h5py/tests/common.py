@@ -110,9 +110,8 @@ class TestCase(ut.TestCase):
         if np.isscalar(dset) or np.isscalar(arr):
             assert np.isscalar(dset) and np.isscalar(arr), \
                 'Scalar/array mismatch ("%r" vs "%r")%s' % (dset, arr, message)
-            assert dset - arr < precision, \
-                "Scalars differ by more than %.3f%s" % (precision, message)
-            return
+            dset = np.asarray(dset)
+            arr = np.asarray(arr)
 
         assert dset.shape == arr.shape, \
             "Shape mismatch (%s vs %s)%s" % (dset.shape, arr.shape, message)
@@ -126,6 +125,9 @@ class TestCase(ut.TestCase):
         elif arr.dtype.kind in ('i', 'f'):
             assert np.all(np.abs(dset[...] - arr[...]) < precision), \
                 "Arrays differ by more than %.3f%s" % (precision, message)
+        elif arr.dtype.kind == 'O':
+            for v1, v2 in zip(dset.flat, arr.flat):
+                self.assertArrayEqual(v1, v2, message=message, precision=precision)
         else:
             assert np.all(dset[...] == arr[...]), \
                 "Arrays are not equal (dtype %s) %s" % (arr.dtype.str, message)
